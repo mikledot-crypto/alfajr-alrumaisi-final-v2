@@ -3,15 +3,18 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { formatArabicDate } from "@/lib/supabase-helpers";
 import { sanitizeHtml } from "@/lib/sanitize";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, Calendar, User, Clock, Tag } from "lucide-react";
 
 interface PostMeta {
   title: string;
   excerpt: string | null;
   cover_image: string | null;
-  author_name: string;
+  author_name: string | null;
   published_at: string | null;
   category_name: string | null;
+  seo_title: string | null;
+  seo_description: string | null;
+  canonical_url: string | null;
 }
 
 export const Route = createFileRoute("/_public/post/$slug")({
@@ -19,7 +22,7 @@ export const Route = createFileRoute("/_public/post/$slug")({
   loader: async ({ params }): Promise<{ meta: PostMeta | null }> => {
     const { data } = await supabase
       .from("posts")
-      .select("title,excerpt,cover_image,author_name,published_at,categories(name_ar)")
+      .select("title,excerpt,cover_image,author_name,published_at,categories(name_ar),seo_title,seo_description,canonical_url")
       .eq("slug", params.slug)
       .eq("status", "published")
       .maybeSingle();
@@ -32,6 +35,9 @@ export const Route = createFileRoute("/_public/post/$slug")({
         author_name: data.author_name,
         published_at: data.published_at,
         category_name: data.categories?.name_ar ?? null,
+        seo_title: data.seo_title,
+        seo_description: data.seo_description,
+        canonical_url: data.canonical_url,
       },
     };
   },
@@ -40,8 +46,32 @@ export const Route = createFileRoute("/_public/post/$slug")({
     if (!m) {
       return { meta: [{ title: "مقال غير موجود — معتز العلقمي" }] };
     }
-    const title = `${m.title} — معتز العلقمي`;
-    const desc = m.excerpt ?? `مقال بقلم ${m.author_name} في مدوّنة معتز العلقمي.`;
+    
+    const title = m.seo_title || `${m.title} — معتز العلقمي`;
+    const desc = m.seo_description || m.excerpt || `مقال بقلم ${m.author_name} في مدوّنة معتز العلقمي.`;
+    
+    // Structured Data (Schema.org Article)
+    const jsonLd = {
+      "@context": "https://schema.org",
+      "@type": "BlogPosting",
+      "headline": m.title,
+      "description": desc,
+      "image": m.cover_image || "",
+      "author": {
+        "@type": "Person",
+        "name": m.author_name || "معتز العلقمي"
+      },
+      "datePublished": m.published_at,
+      "publisher": {
+        "@type": "Organization",
+        "name": "معتز العلقمي",
+        "logo": {
+          "@type": "ImageObject",
+          "url": ""
+        }
+      }
+    };
+
     const meta = [
       { title },
       { name: "description", content: desc },
@@ -60,14 +90,23 @@ export const Route = createFileRoute("/_public/post/$slug")({
             { name: "twitter:image", content: m.cover_image },
           ]
         : []),
+      ...(m.canonical_url ? [{ rel: "canonical", href: m.canonical_url }] : []),
     ];
-    return { meta };
+
+    return { 
+      meta,
+      scripts: [
+        {
+          type: "application/ld+json",
+          children: JSON.stringify(jsonLd)
+        }
+      ]
+    };
   },
 });
 
 function PostPage() {
   const { slug } = Route.useParams();
-
   const { data: post, isLoading } = useQuery({
     queryKey: ["post", slug],
     queryFn: async () => {
@@ -83,21 +122,22 @@ function PostPage() {
 
   if (isLoading) {
     return (
-      <div className="container mx-auto max-w-3xl px-4 py-20">
+      <div className="container mx-auto max-w-3xl px-4 py-20 animate-pulse">
         <div className="space-y-4 text-center">
-          <div className="skeleton mx-auto h-3 w-24" />
-          <div className="skeleton mx-auto h-10 w-3/4" />
-          <div className="skeleton mx-auto h-3 w-40" />
+          <div className="mx-auto h-3 w-24 rounded bg-muted" />
+          <div className="mx-auto h-10 w-3/4 rounded bg-muted" />
+          <div className="mx-auto h-3 w-40 rounded bg-muted" />
         </div>
-        <div className="skeleton mt-10 aspect-[16/9] w-full" />
-        <div className="mt-10 space-y-3">
-          <div className="skeleton h-4 w-full" />
-          <div className="skeleton h-4 w-full" />
-          <div className="skeleton h-4 w-2/3" />
+        <div className="mt-10 aspect-[16/9] w-full rounded-xl bg-muted" />
+        <div className="mt-10 space-y-4">
+          <div className="h-4 w-full rounded bg-muted" />
+          <div className="h-4 w-full rounded bg-muted" />
+          <div className="h-4 w-2/3 rounded bg-muted" />
         </div>
       </div>
     );
   }
+
   if (!post) {
     throw notFound();
   }
@@ -111,46 +151,68 @@ function PostPage() {
           <Link
             to="/category/$slug"
             params={{ slug: post.categories.slug }}
-            className="text-xs font-semibold uppercase tracking-[0.3em] text-gold-deep hover:text-burgundy hover:underline"
+            className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-gold-deep hover:text-burgundy transition-colors"
           >
+            <Tag className="h-3 w-3" />
             {post.categories.name_ar}
           </Link>
         )}
-        <h1 className="mt-4 font-display text-3xl font-bold leading-[1.2] text-foreground md:text-5xl">
+        <h1 className="mt-6 font-display text-4xl font-bold leading-[1.3] text-foreground md:text-6xl">
           {post.title}
         </h1>
-        <div className="mt-6 flex flex-wrap items-center justify-center gap-3 text-sm text-muted-foreground">
-          <span>{post.author_name}</span>
-          <span className="text-gold">•</span>
-          <span>{formatArabicDate(post.published_at)}</span>
-          <span className="text-gold">•</span>
-          <span>{post.reading_minutes} دقائق قراءة</span>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground border-y border-border/40 py-4">
+          <div className="flex items-center gap-2">
+            <User className="h-4 w-4 text-gold" />
+            <span>{post.author_name}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-gold" />
+            <span>{formatArabicDate(post.published_at)}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4 text-gold" />
+            <span>{post.reading_minutes} دقائق قراءة</span>
+          </div>
         </div>
       </header>
 
       {post.cover_image && (
-        <div className="mb-12 overflow-hidden rounded-xl shadow-elegant" style={{ boxShadow: "var(--shadow-luxe)" }}>
-          <img src={post.cover_image} alt={post.title} className="w-full" loading="eager" />
+        <div className="mb-12 overflow-hidden rounded-2xl shadow-2xl">
+          <img 
+            src={post.cover_image} 
+            alt={post.title} 
+            className="w-full transition-transform duration-700 hover:scale-105" 
+            loading="eager" 
+          />
         </div>
       )}
 
       {post.excerpt && (
-        <p className="mb-12 border-r-4 border-gold pr-5 font-serif text-lg leading-9 italic text-muted-foreground">
-          {post.excerpt}
-        </p>
+        <div className="mb-12 relative">
+          <div className="absolute right-0 top-0 h-full w-1 bg-gold rounded-full" />
+          <p className="pr-6 font-serif text-xl leading-10 italic text-muted-foreground/90">
+            {post.excerpt}
+          </p>
+        </div>
       )}
 
       <div
-        className="article-content"
+        className="article-content prose prose-gold max-w-none"
         dangerouslySetInnerHTML={{ __html: safeContent }}
       />
 
-      <div className="mt-20 border-t border-border/60 pt-8 text-center">
-        <Link to="/articles" className="inline-flex items-center gap-2 text-sm font-medium text-gold-deep hover:text-burgundy hover:underline">
-          <ArrowRight className="h-4 w-4" />
-          عودة إلى كل المقالات
-        </Link>
-      </div>
+      <footer className="mt-20 border-t border-border/60 pt-10">
+        <div className="flex flex-col items-center gap-6">
+          <div className="text-gold">❖ ❖ ❖</div>
+          <Link 
+            to="/articles" 
+            className="group inline-flex items-center gap-3 rounded-full bg-muted/50 px-6 py-3 text-sm font-bold transition-all hover:bg-gold hover:text-white"
+          >
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            عودة إلى كل المقالات
+          </Link>
+        </div>
+      </footer>
     </article>
   );
 }
