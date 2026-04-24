@@ -50,9 +50,9 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --font-display: "Reem Kufi", "Amiri", "Scheherazade New", Georgia, serif;
-  --font-serif: "Amiri", "Scheherazade New", Georgia, serif;
-  --font-body: "Tajawal", "Cairo", system-ui, sans-serif;
+  --font-display: "Cairo", "Tajawal", system-ui, sans-serif;
+  --font-serif: "Cairo", "Tajawal", system-ui, sans-serif;
+  --font-body: "Cairo", "Tajawal", system-ui, sans-serif;
 
   --shadow-elegant: 0 1px 2px oklch(0.22 0.02 60 / 0.04), 0 8px 24px -8px oklch(0.22 0.02 60 / 0.08);
   --shadow-luxe: 0 4px 12px -2px oklch(0.22 0.02 60 / 0.06), 0 24px 48px -16px oklch(0.45 0.08 60 / 0.18);

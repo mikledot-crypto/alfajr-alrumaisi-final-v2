@@ -79,6 +79,8 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          seo_description: string | null
+          seo_title: string | null
           slug: string
           title: string
           updated_at: string
@@ -87,6 +89,8 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          seo_description?: string | null
+          seo_title?: string | null
           slug: string
           title: string
           updated_at?: string
@@ -95,6 +99,8 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          seo_description?: string | null
+          seo_title?: string | null
           slug?: string
           title?: string
           updated_at?: string
@@ -112,6 +118,9 @@ export type Database = {
           id: string
           published_at: string | null
           reading_minutes: number
+          canonical_url: string | null
+          seo_description: string | null
+          seo_title: string | null
           slug: string
           status: string
           title: string
@@ -127,6 +136,9 @@ export type Database = {
           id?: string
           published_at?: string | null
           reading_minutes?: number
+          canonical_url?: string | null
+          seo_description?: string | null
+          seo_title?: string | null
           slug: string
           status?: string
           title: string
@@ -142,6 +154,9 @@ export type Database = {
           id?: string
           published_at?: string | null
           reading_minutes?: number
+          canonical_url?: string | null
+          seo_description?: string | null
+          seo_title?: string | null
           slug?: string
           status?: string
           title?: string
@@ -156,6 +171,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      profiles: {
+        Row: {
+          id: string
+          display_name: string | null
+          email: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id: string
+          display_name?: string | null
+          email?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          display_name?: string | null
+          email?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       site_settings: {
         Row: {

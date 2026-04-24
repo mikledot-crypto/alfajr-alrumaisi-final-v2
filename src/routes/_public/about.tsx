@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { sanitizeHtml } from "@/lib/sanitize";
 
 export const Route = createFileRoute("/_public/about")({
   component: AboutPage,
@@ -27,7 +28,7 @@ function AboutPage() {
         <div className="ornament mx-auto mb-4 max-w-xs">❖</div>
         <h1 className="font-display text-4xl font-bold md:text-5xl">{page?.title ?? "عن الموقع"}</h1>
       </header>
-      <div className="article-content whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: page?.content ?? "" }} />
+      <div className="article-content whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: sanitizeHtml(page?.content ?? "") }} />
     </div>
   );
 }
