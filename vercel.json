@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "outputDirectory": "dist/client",
+  "rewrites": [
+    {
+      "source": "/(?!assets/)(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
