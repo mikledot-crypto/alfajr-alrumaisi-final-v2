@@ -1,7 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { formatArabicDate } from "@/lib/supabase-helpers";
+import { authorInitials, formatArabicDate } from "@/lib/supabase-helpers";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { ArrowRight, Calendar, User, Clock, Tag } from "lucide-react";
 
@@ -22,7 +22,7 @@ export const Route = createFileRoute("/_public/post/$slug")({
   loader: async ({ params }): Promise<{ meta: PostMeta | null }> => {
     const { data } = await supabase
       .from("posts")
-      .select("title,excerpt,cover_image,author_name,published_at,categories(name_ar),seo_title,seo_description,canonical_url")
+      .select("title,excerpt,cover_image,author_name,published_at,categories(name_ar),seo_title,seo_description")
       .eq("slug", params.slug)
       .eq("status", "published")
       .maybeSingle();
@@ -37,7 +37,7 @@ export const Route = createFileRoute("/_public/post/$slug")({
         category_name: data.categories?.name_ar ?? null,
         seo_title: data.seo_title,
         seo_description: data.seo_description,
-        canonical_url: data.canonical_url,
+        canonical_url: null,
       },
     };
   },
@@ -162,8 +162,8 @@ function PostPage() {
         </h1>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground border-y border-border/40 py-4">
           <div className="flex items-center gap-2">
-            <User className="h-4 w-4 text-gold" />
-            <span>{post.author_name}</span>
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gold/15 text-sm font-bold text-gold-deep">{authorInitials(post.author_name)}</span>
+            <span>{post.author_name || "معتز العلقمي"}</span>
           </div>
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-gold" />

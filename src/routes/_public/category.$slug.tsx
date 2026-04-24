@@ -1,7 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { formatArabicDate } from "@/lib/supabase-helpers";
+import { authorInitials, formatArabicDate, makeExcerpt } from "@/lib/supabase-helpers";
 import { PostCardSkeleton } from "@/components/site/Skeleton";
 
 interface CategoryMeta {
@@ -56,7 +56,7 @@ function CategoryPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("posts")
-        .select("id,title,slug,excerpt,cover_image,published_at,reading_minutes")
+        .select("id,title,slug,excerpt,content,cover_image,published_at,reading_minutes,author_name")
         .eq("status", "published")
         .eq("category_id", category!.id)
         .order("published_at", { ascending: false });
@@ -107,10 +107,8 @@ function CategoryPage() {
               <h3 className="mt-4 font-display text-xl font-bold leading-snug text-foreground transition-colors group-hover:text-gold-deep">
                 {p.title}
               </h3>
-              {p.excerpt && <p className="mt-2 line-clamp-2 text-sm leading-7 text-muted-foreground">{p.excerpt}</p>}
-              <div className="mt-3 text-xs text-muted-foreground">
-                {formatArabicDate(p.published_at)} • {p.reading_minutes} دقائق
-              </div>
+              <p className="mt-2 line-clamp-2 text-sm leading-7 text-muted-foreground">{p.excerpt || makeExcerpt(p.content || "")}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gold/15 font-bold text-gold-deep">{authorInitials(p.author_name)}</span><span>{p.author_name || "معتز العلقمي"}</span><span>•</span><span>{formatArabicDate(p.published_at)}</span><span>•</span><span>{p.reading_minutes} دقائق</span></div>
             </Link>
           ))}
         </div>

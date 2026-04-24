@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,11 +14,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowRight, Save, Send, Globe, Search } from "lucide-react";
+import { ArrowRight, Save, Send, Globe, Search, Upload, Loader2, ExternalLink } from "lucide-react";
 import { RichEditor } from "@/components/admin/RichEditor";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { slugify, estimateReadingMinutes } from "@/lib/supabase-helpers";
+import {
+  slugify,
+  estimateReadingMinutes,
+  makeExcerpt,
+  uploadMediaFile,
+  isMissingColumnError,
+} from "@/lib/supabase-helpers";
+import { useAuth } from "@/context/AuthContext";
 
 export const Route = createFileRoute("/admin/posts/$id")({
   component: PostEdit,
@@ -37,11 +44,30 @@ const schema = z.object({
   canonical_url: z.string().url().or(z.literal("")).optional(),
 });
 
+type PostPayload = {
+  title: string;
+  slug: string;
+  excerpt: string | null;
+  content: string;
+  cover_image: string | null;
+  category_id: string | null;
+  status: "draft" | "published";
+  reading_minutes: number;
+  published_at: string | null;
+  author_name?: string;
+  author_id?: string;
+  seo_title?: string | null;
+  seo_description?: string | null;
+  canonical_url?: string | null;
+};
+
 function PostEdit() {
   const { id } = Route.useParams();
   const isNew = id === "new";
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { user } = useAuth();
+  const coverInputRef = useRef<HTMLInputElement | null>(null);
 
   const [form, setForm] = useState({
     title: "",
@@ -57,7 +83,9 @@ function PostEdit() {
   });
 
   const [slugTouched, setSlugTouched] = useState(false);
+  const [excerptTouched, setExcerptTouched] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
 
   const { data: existing, isLoading: loadingPost } = useQuery({
     queryKey: ["admin_post", id],
@@ -93,6 +121,7 @@ function PostEdit() {
         canonical_url: existing.canonical_url || "",
       });
       setSlugTouched(true);
+      setExcerptTouched(Boolean(existing.excerpt));
     }
   }, [existing]);
 
@@ -102,10 +131,42 @@ function PostEdit() {
     }
   }, [form.title, isNew, slugTouched]);
 
+  useEffect(() => {
+    if (!excerptTouched && form.content) {
+      setForm((f) => ({ ...f, excerpt: makeExcerpt(f.content) }));
+    }
+  }, [form.content, excerptTouched]);
+
+  const uploadCover = async (file?: File) => {
+    if (!file) return;
+    try {
+      setUploadingCover(true);
+      const url = await uploadMediaFile(file, "covers");
+      setForm((f) => ({ ...f, cover_image: url }));
+      toast.success("تم رفع صورة الغلاف");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذّر رفع صورة الغلاف");
+    } finally {
+      setUploadingCover(false);
+      if (coverInputRef.current) coverInputRef.current.value = "";
+    }
+  };
+
+  const persistPost = async (payload: PostPayload) => {
+    const cleanPayload = Object.fromEntries(
+      Object.entries(payload).filter(([, value]) => value !== undefined),
+    );
+
+    if (isNew) {
+      return await supabase.from("posts").insert(cleanPayload).select("id,slug,status").single();
+    }
+    return await supabase.from("posts").update(cleanPayload).eq("id", id).select("id,slug,status").single();
+  };
+
   const save = async (statusOverride?: "draft" | "published") => {
     const finalStatus = statusOverride || form.status;
-    const finalForm = { ...form, status: finalStatus };
-    
+    const finalForm = { ...form, status: finalStatus, excerpt: form.excerpt || makeExcerpt(form.content) };
+
     const parsed = schema.safeParse(finalForm);
     if (!parsed.success) {
       toast.error(parsed.error.issues[0].message);
@@ -113,32 +174,60 @@ function PostEdit() {
     }
 
     setLoading(true);
-    const payload = {
-      ...parsed.data,
+
+    const authorName =
+      user?.user_metadata?.display_name ||
+      user?.user_metadata?.full_name ||
+      user?.email?.split("@")[0] ||
+      "معتز العلقمي";
+
+    const payload: PostPayload = {
+      title: parsed.data.title,
+      slug: parsed.data.slug,
+      excerpt: parsed.data.excerpt ? parsed.data.excerpt : makeExcerpt(parsed.data.content),
+      content: parsed.data.content,
+      cover_image: parsed.data.cover_image || null,
+      category_id: parsed.data.category_id,
+      status: finalStatus,
       reading_minutes: estimateReadingMinutes(parsed.data.content),
-      published_at: finalStatus === "published" 
-        ? (existing?.published_at ?? new Date().toISOString()) 
-        : null,
+      published_at: finalStatus === "published" ? (existing?.published_at ?? new Date().toISOString()) : null,
+      author_name: authorName,
+      author_id: user?.id,
+      seo_title: parsed.data.seo_title || null,
+      seo_description: parsed.data.seo_description || null,
+      canonical_url: parsed.data.canonical_url || null,
     };
 
-    let error;
-    if (isNew) {
-      const res = await supabase.from("posts").insert(payload).select("id").single();
-      error = res.error;
-      if (!error && res.data) {
-        toast.success("تم الحفظ بنجاح");
-        navigate({ to: "/admin/posts/$id", params: { id: res.data.id } });
+    try {
+      let res = await persistPost(payload);
+
+      if (res.error && isMissingColumnError(res.error)) {
+        const { canonical_url: _canonical, seo_title: _seoTitle, seo_description: _seoDesc, author_id: _authorId, ...compatiblePayload } = payload;
+        res = await persistPost(compatiblePayload);
       }
-    } else {
-      const res = await supabase.from("posts").update(payload).eq("id", id);
-      error = res.error;
-      if (!error) {
-        toast.success("تم التحديث بنجاح");
-        qc.invalidateQueries({ queryKey: ["admin_post", id] });
+
+      if (res.error) {
+        toast.error(res.error.message);
+        return;
       }
+
+      const saved = res.data;
+      toast.success(finalStatus === "published" ? "تم نشر المقال" : "تم حفظ المسودة");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["admin_posts"] }),
+        qc.invalidateQueries({ queryKey: ["admin_post", id] }),
+        qc.invalidateQueries({ queryKey: ["home_posts"] }),
+        qc.invalidateQueries({ queryKey: ["all_posts"] }),
+      ]);
+
+      if (finalStatus === "published" && saved?.slug) {
+        navigate({ to: "/post/$slug", params: { slug: saved.slug } });
+      } else if (isNew && saved?.id) {
+        navigate({ to: "/admin/posts/$id", params: { id: saved.id } });
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-    if (error) toast.error(error.message);
   };
 
   if (loadingPost) return <div className="p-8 text-center">جارِ التحميل...</div>;
@@ -147,52 +236,62 @@ function PostEdit() {
     <div className="space-y-8 pb-20">
       <header className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
-          <Link to="/admin/posts" className="rounded-full p-2 hover:bg-accent transition-colors">
+          <Link to="/admin/posts" className="rounded-full p-2 transition-colors hover:bg-accent">
             <ArrowRight className="h-5 w-5" />
           </Link>
           <div>
             <h1 className="font-display text-3xl font-bold">{isNew ? "إنشاء مقال جديد" : "تعديل المقال"}</h1>
-            <p className="text-sm text-muted-foreground mt-1">أضف محتوىً ملهماً لقرائك</p>
+            <p className="mt-1 text-sm text-muted-foreground">أضف محتوىً ملهماً لقرائك</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Button variant="outline" disabled={loading} onClick={() => save("draft")} className="gap-2">
+        <div className="flex flex-wrap items-center gap-3">
+          {!isNew && form.slug && (
+            <Link to="/post/$slug" params={{ slug: form.slug }} className="inline-flex items-center gap-2 rounded-md border border-input px-4 py-2 text-sm hover:bg-accent">
+              <ExternalLink className="h-4 w-4" /> معاينة
+            </Link>
+          )}
+          <Button variant="outline" disabled={loading} onClick={() => void save("draft")} className="gap-2">
             <Save className="h-4 w-4" /> حفظ مسودة
           </Button>
-          <Button disabled={loading} onClick={() => save("published")} className="gap-2">
-            <Send className="h-4 w-4" /> {form.status === "published" ? "تحديث ونشر" : "نشر المقال"}
+          <Button disabled={loading} onClick={() => void save("published")} className="gap-2">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            {form.status === "published" ? "تحديث ونشر" : "نشر المقال"}
           </Button>
         </div>
       </header>
 
       <Tabs defaultValue="content" className="w-full" dir="rtl">
-        <TabsList className="grid w-full max-w-md grid-cols-2 mb-8">
+        <TabsList className="mb-8 grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="content" className="gap-2">محتوى المقال</TabsTrigger>
           <TabsTrigger value="seo" className="gap-2">إعدادات SEO</TabsTrigger>
         </TabsList>
 
         <TabsContent value="content" className="space-y-8">
-          <div className="grid gap-8 lg:grid-cols-[1fr_320px]">
-            <div className="space-y-6">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="space-y-6 min-w-0">
               <div className="space-y-2">
                 <Label className="text-base font-bold">عنوان المقال</Label>
-                <Input 
-                  value={form.title} 
-                  onChange={(e) => setForm({ ...form, title: e.target.value })} 
+                <Input
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
                   placeholder="أدخل عنواناً جذاباً..."
                   className="h-12 text-lg font-display"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label className="text-base font-bold">المقتطف (Excerpt)</Label>
-                <Textarea 
-                  rows={3} 
-                  value={form.excerpt} 
-                  onChange={(e) => setForm({ ...form, excerpt: e.target.value })} 
-                  placeholder="وصف قصير يظهر في الصفحة الرئيسية..."
+                <Label className="text-base font-bold">المقتطف التلقائي</Label>
+                <Textarea
+                  rows={3}
+                  value={form.excerpt}
+                  onChange={(e) => {
+                    setExcerptTouched(true);
+                    setForm({ ...form, excerpt: e.target.value });
+                  }}
+                  placeholder="يُنشأ تلقائياً من بداية المقال إذا تركته فارغاً..."
                   className="resize-none leading-relaxed"
                 />
+                <p className="text-[11px] text-muted-foreground">يمكنك تركه فارغاً ليتم استخراجه من نص المقال تلقائياً.</p>
               </div>
 
               <div className="space-y-2">
@@ -202,11 +301,11 @@ function PostEdit() {
             </div>
 
             <aside className="space-y-6">
-              <div className="rounded-2xl border border-border bg-card p-6 shadow-sm space-y-6">
-                <h3 className="font-display font-bold flex items-center gap-2 border-b border-border pb-4">
+              <div className="space-y-6 rounded-2xl border border-border bg-card p-6 shadow-sm">
+                <h3 className="flex items-center gap-2 border-b border-border pb-4 font-display font-bold">
                   <Globe className="h-4 w-4 text-gold" /> إعدادات النشر
                 </h3>
-                
+
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>التصنيف</Label>
@@ -223,21 +322,34 @@ function PostEdit() {
 
                   <div className="space-y-2">
                     <Label>الرابط الدائم (Slug)</Label>
-                    <Input 
-                      value={form.slug} 
-                      onChange={(e) => { setSlugTouched(true); setForm({ ...form, slug: e.target.value }); }} 
-                      className="font-mono text-xs dir-ltr text-left"
+                    <Input
+                      value={form.slug}
+                      onChange={(e) => { setSlugTouched(true); setForm({ ...form, slug: slugify(e.target.value) }); }}
+                      className="dir-ltr text-left font-mono text-xs"
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label>صورة الغلاف (URL)</Label>
-                    <Input 
-                      value={form.cover_image} 
-                      onChange={(e) => setForm({ ...form, cover_image: e.target.value })} 
-                      placeholder="https://example.com/image.jpg"
-                      className="text-xs dir-ltr text-left"
+                    <Label>صورة الغلاف</Label>
+                    <input
+                      ref={coverInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => void uploadCover(e.target.files?.[0])}
                     />
+                    <div className="flex gap-2">
+                      <Input
+                        value={form.cover_image}
+                        onChange={(e) => setForm({ ...form, cover_image: e.target.value })}
+                        placeholder="https://example.com/image.jpg"
+                        className="dir-ltr text-left text-xs"
+                      />
+                      <Button type="button" variant="outline" disabled={uploadingCover} onClick={() => coverInputRef.current?.click()}>
+                        {uploadingCover ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">ارفع صورة من الهاتف أو ضع رابطاً خارجياً.</p>
                     {form.cover_image && (
                       <div className="mt-4 overflow-hidden rounded-lg border border-border">
                         <img src={form.cover_image} alt="Preview" className="aspect-video w-full object-cover" />
@@ -251,64 +363,29 @@ function PostEdit() {
         </TabsContent>
 
         <TabsContent value="seo">
-          <div className="max-w-3xl space-y-8 rounded-2xl border border-border bg-card p-8 shadow-sm">
+          <div className="max-w-3xl space-y-8 rounded-2xl border border-border bg-card p-6 sm:p-8 shadow-sm">
             <div className="flex items-center gap-3 border-b border-border pb-6">
-              <div className="p-3 rounded-full bg-primary/10 text-primary">
+              <div className="rounded-full bg-primary/10 p-3 text-primary">
                 <Search className="h-6 w-6" />
               </div>
               <div>
                 <h3 className="font-display text-xl font-bold">تحسين محركات البحث</h3>
-                <p className="text-sm text-muted-foreground mt-1">تحكم في كيفية ظهور مقالك في نتائج البحث وشبكات التواصل</p>
+                <p className="mt-1 text-sm text-muted-foreground">تحكم في كيفية ظهور مقالك في نتائج البحث وشبكات التواصل</p>
               </div>
             </div>
 
             <div className="space-y-6">
               <div className="space-y-2">
-                <Label className="font-bold">عنوان SEO (Meta Title)</Label>
-                <Input 
-                  value={form.seo_title} 
-                  onChange={(e) => setForm({ ...form, seo_title: e.target.value })} 
-                  placeholder={form.title}
-                />
-                <p className="text-[10px] text-muted-foreground">يفضل أن يكون بين 50-60 حرفاً.</p>
+                <Label className="font-bold">عنوان SEO</Label>
+                <Input value={form.seo_title} onChange={(e) => setForm({ ...form, seo_title: e.target.value })} placeholder={form.title} />
               </div>
-
               <div className="space-y-2">
-                <Label className="font-bold">وصف SEO (Meta Description)</Label>
-                <Textarea 
-                  rows={3}
-                  value={form.seo_description} 
-                  onChange={(e) => setForm({ ...form, seo_description: e.target.value })} 
-                  placeholder={form.excerpt}
-                />
-                <p className="text-[10px] text-muted-foreground">يفضل أن يكون بين 150-160 حرفاً لجذب الزوار.</p>
+                <Label className="font-bold">وصف SEO</Label>
+                <Textarea rows={3} value={form.seo_description} onChange={(e) => setForm({ ...form, seo_description: e.target.value })} placeholder={form.excerpt} />
               </div>
-
               <div className="space-y-2">
-                <Label className="font-bold">الرابط الأصلي (Canonical URL)</Label>
-                <Input 
-                  value={form.canonical_url} 
-                  onChange={(e) => setForm({ ...form, canonical_url: e.target.value })} 
-                  placeholder="https://..."
-                  className="dir-ltr text-left"
-                />
-              </div>
-            </div>
-
-            <div className="rounded-xl bg-muted/50 p-6 border border-border/50">
-              <h4 className="text-sm font-bold mb-4 flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-green-500" /> معاينة محرك البحث
-              </h4>
-              <div className="space-y-1">
-                <div className="text-[#1a0dab] text-xl hover:underline cursor-pointer truncate">
-                  {form.seo_title || form.title || "عنوان المقال يظهر هنا"}
-                </div>
-                <div className="text-[#006621] text-sm truncate dir-ltr text-right">
-                  {typeof window !== 'undefined' ? window.location.origin : ''}/post/{form.slug || "link-sample"}
-                </div>
-                <div className="text-[#4d5156] text-sm line-clamp-2">
-                  {form.seo_description || form.excerpt || "وصف المقال الذي سيظهر في نتائج البحث لجذب القراء..."}
-                </div>
+                <Label className="font-bold">الرابط الأصلي Canonical</Label>
+                <Input value={form.canonical_url} onChange={(e) => setForm({ ...form, canonical_url: e.target.value })} placeholder="https://..." className="dir-ltr text-left" />
               </div>
             </div>
           </div>

@@ -95,3 +95,31 @@ Output Directory: اتركه فارغًا
 
 - إذا كانت قاعدة البيانات أنشئت بسكيمة قديمة فيها `categories.name` أو `posts.published`، شغّل ملف `20260425010000_safe_existing_database_patch.sql`.
 - إذا ظهرت مشكلة في صفحة المستخدمين، تأكد من إضافة `SUPABASE_SERVICE_ROLE_KEY` في Vercel.
+
+## آخر تحسينات مهمة
+
+تمت إضافة دعم رفع الصور مباشرة من الهاتف أو الكمبيوتر عبر Supabase Storage bucket باسم `media`، مع إبقاء خيار رابط الصورة الخارجي. إذا كانت قاعدة البيانات منشأة قبل هذه النسخة، شغّل هذا الملف في Supabase SQL Editor مرة واحدة فقط:
+
+```text
+supabase/migrations/20260425020000_media_and_author_patch.sql
+```
+
+هذا الملف آمن: لا يحذف الجداول ولا يعيد إنشاءها ولا يمس البيانات الموجودة. يضيف فقط bucket للصور وأعمدة اختيارية للكاتب والصورة الشخصية.
+
+### إعدادات Vercel الصحيحة
+
+- Framework Preset: Other
+- Install Command: `npm install`
+- Build Command: `npm run build`
+- Output Directory: اتركه فارغاً
+
+### متغيرات البيئة المطلوبة
+
+```env
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
+VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
+VITE_SUPABASE_PROJECT_ID=YOUR_PROJECT_REF
+SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
+```

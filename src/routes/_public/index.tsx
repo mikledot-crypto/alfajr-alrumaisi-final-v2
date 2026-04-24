@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { formatArabicDate } from "@/lib/supabase-helpers";
+import { authorInitials, formatArabicDate, makeExcerpt } from "@/lib/supabase-helpers";
 import { NewsletterForm } from "@/components/site/NewsletterForm";
 import { FeaturedSkeleton, PostCardSkeleton } from "@/components/site/Skeleton";
 import { ArrowLeft, BookOpen, Feather, Sparkles } from "lucide-react";
@@ -27,7 +27,7 @@ function HomePage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("posts")
-        .select("id,title,slug,excerpt,cover_image,published_at,reading_minutes,categories(name_ar,slug)")
+        .select("id,title,slug,excerpt,content,cover_image,published_at,reading_minutes,author_name,categories(name_ar,slug)")
         .eq("status", "published")
         .order("published_at", { ascending: false })
         .limit(7);
@@ -141,16 +141,10 @@ function HomePage() {
               <h2 className="font-display text-3xl font-bold leading-[1.25] text-foreground transition-colors group-hover:text-gold-deep md:text-5xl">
                 {featured.title}
               </h2>
-              {featured.excerpt && (
-                <p className="mt-5 text-base leading-[2] text-muted-foreground line-clamp-3 md:text-lg">
-                  {featured.excerpt}
-                </p>
-              )}
-              <div className="mt-6 flex items-center gap-3 text-xs text-muted-foreground">
-                <span>{formatArabicDate(featured.published_at)}</span>
-                <span className="text-gold">•</span>
-                <span>{featured.reading_minutes} دقائق قراءة</span>
-              </div>
+              <p className="mt-5 text-base leading-[2] text-muted-foreground line-clamp-3 md:text-lg">
+                {featured.excerpt || makeExcerpt(featured.content || "")}
+              </p>
+              <div className="mt-6 flex flex-wrap items-center gap-3 text-xs text-muted-foreground"><span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gold/15 text-sm font-bold text-gold-deep">{authorInitials(featured.author_name)}</span><span>{featured.author_name || "معتز العلقمي"}</span><span className="text-gold">•</span><span>{formatArabicDate(featured.published_at)}</span><span className="text-gold">•</span><span>{featured.reading_minutes} دقائق قراءة</span></div>
             </div>
           </Link>
         ) : (
@@ -202,14 +196,10 @@ function HomePage() {
                     <h3 className="mt-2 font-display text-xl font-bold leading-snug text-foreground transition-colors group-hover:text-gold-deep">
                       {p.title}
                     </h3>
-                    {p.excerpt && (
-                      <p className="mt-2 line-clamp-2 text-sm leading-7 text-muted-foreground">
-                        {p.excerpt}
-                      </p>
-                    )}
-                    <div className="mt-3 text-xs text-muted-foreground">
-                      {formatArabicDate(p.published_at)} • {p.reading_minutes} دقائق
-                    </div>
+                    <p className="mt-2 line-clamp-2 text-sm leading-7 text-muted-foreground">
+                      {p.excerpt || makeExcerpt(p.content || "")}
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gold/15 font-bold text-gold-deep">{authorInitials(p.author_name)}</span><span>{p.author_name || "معتز العلقمي"}</span><span>•</span><span>{formatArabicDate(p.published_at)}</span><span>•</span><span>{p.reading_minutes} دقائق</span></div>
                   </Link>
                 ))}
           </div>

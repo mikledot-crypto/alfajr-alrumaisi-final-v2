@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { formatArabicDate } from "@/lib/supabase-helpers";
+import { authorInitials, formatArabicDate, makeExcerpt } from "@/lib/supabase-helpers";
 import { ArticleRowSkeleton } from "@/components/site/Skeleton";
 
 export const Route = createFileRoute("/_public/articles")({
@@ -24,7 +24,7 @@ function ArticlesPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("posts")
-        .select("id,title,slug,excerpt,cover_image,published_at,reading_minutes,categories(name_ar,slug)")
+        .select("id,title,slug,excerpt,content,cover_image,published_at,reading_minutes,author_name,categories(name_ar,slug)")
         .eq("status", "published")
         .order("published_at", { ascending: false });
       return data ?? [];
@@ -69,10 +69,8 @@ function ArticlesPage() {
                     {p.title}
                   </h2>
                 </Link>
-                {p.excerpt && <p className="mt-3 line-clamp-3 leading-8 text-muted-foreground">{p.excerpt}</p>}
-                <div className="mt-5 text-xs text-muted-foreground">
-                  {formatArabicDate(p.published_at)} • {p.reading_minutes} دقائق قراءة
-                </div>
+                <p className="mt-3 line-clamp-3 leading-8 text-muted-foreground">{p.excerpt || makeExcerpt(p.content || "")}</p>
+                <div className="mt-5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gold/15 font-bold text-gold-deep">{authorInitials(p.author_name)}</span><span>{p.author_name || "معتز العلقمي"}</span><span>•</span><span>{formatArabicDate(p.published_at)}</span><span>•</span><span>{p.reading_minutes} دقائق قراءة</span></div>
               </div>
             </article>
           ))}
