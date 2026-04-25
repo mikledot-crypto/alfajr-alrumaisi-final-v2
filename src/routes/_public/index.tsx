@@ -27,7 +27,7 @@ function HomePage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("posts")
-        .select("id,title,slug,excerpt,content,cover_image,published_at,reading_minutes,author_name,categories(name_ar,slug)")
+        .select("id,title,slug,excerpt,content,cover_image,published_at,reading_minutes,categories(name_ar,slug),profiles(display_name)")
         .eq("status", "published")
         .order("published_at", { ascending: false })
         .limit(7);
@@ -133,9 +133,9 @@ function HomePage() {
               <div className="aspect-[4/3] rounded-xl bg-gradient-to-bl from-accent via-muted to-accent/50" />
             )}
             <div className="flex flex-col justify-center">
-              {featured.categories && (
+              {(featured.categories as any) && (
                 <span className="mb-4 text-xs font-semibold uppercase tracking-[0.25em] text-gold-deep">
-                  {featured.categories.name_ar}
+                  {(featured.categories as any).name_ar}
                 </span>
               )}
               <h2 className="font-display text-3xl font-bold leading-[1.25] text-foreground transition-colors group-hover:text-gold-deep md:text-5xl">
@@ -144,7 +144,16 @@ function HomePage() {
               <p className="mt-5 text-base leading-[2] text-muted-foreground line-clamp-3 md:text-lg">
                 {featured.excerpt || makeExcerpt(featured.content || "")}
               </p>
-              <div className="mt-6 flex flex-wrap items-center gap-3 text-xs text-muted-foreground"><span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gold/15 text-sm font-bold text-gold-deep">{authorInitials(featured.author_name)}</span><span>{featured.author_name || "معتز العلقمي"}</span><span className="text-gold">•</span><span>{formatArabicDate(featured.published_at)}</span><span className="text-gold">•</span><span>{featured.reading_minutes} دقائق قراءة</span></div>
+              <div className="mt-6 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gold/15 text-sm font-bold text-gold-deep">
+                  {authorInitials((featured.profiles as any)?.display_name || "معتز العلقمي")}
+                </span>
+                <span>{(featured.profiles as any)?.display_name || "معتز العلقمي"}</span>
+                <span className="text-gold">•</span>
+                <span>{formatArabicDate(featured.published_at)}</span>
+                <span className="text-gold">•</span>
+                <span>{featured.reading_minutes} دقائق قراءة</span>
+              </div>
             </div>
           </Link>
         ) : (
@@ -169,39 +178,51 @@ function HomePage() {
           <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-3">
             {isLoading
               ? Array.from({ length: 6 }).map((_, i) => <PostCardSkeleton key={i} />)
-              : rest.map((p) => (
-                  <Link
-                    key={p.id}
-                    to="/post/$slug"
-                    params={{ slug: p.slug }}
-                    className="group flex flex-col"
-                  >
-                    {p.cover_image ? (
-                      <div className="aspect-[16/10] overflow-hidden rounded-lg bg-muted">
-                        <img
-                          src={p.cover_image}
-                          alt={p.title}
-                          loading="lazy"
-                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                        />
+              : rest.map((p) => {
+                  const authorName = (p.profiles as any)?.display_name || "معتز العلقمي";
+                  return (
+                    <Link
+                      key={p.id}
+                      to="/post/$slug"
+                      params={{ slug: p.slug }}
+                      className="group flex flex-col"
+                    >
+                      {p.cover_image ? (
+                        <div className="aspect-[16/10] overflow-hidden rounded-lg bg-muted">
+                          <img
+                            src={p.cover_image}
+                            alt={p.title}
+                            loading="lazy"
+                            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          />
+                        </div>
+                      ) : (
+                        <div className="aspect-[16/10] rounded-lg bg-gradient-to-bl from-accent to-muted" />
+                      )}
+                      {(p.categories as any) && (
+                        <span className="mt-4 text-xs font-semibold uppercase tracking-[0.2em] text-gold-deep">
+                          {(p.categories as any).name_ar}
+                        </span>
+                      )}
+                      <h3 className="mt-2 font-display text-xl font-bold leading-snug text-foreground transition-colors group-hover:text-gold-deep">
+                        {p.title}
+                      </h3>
+                      <p className="mt-2 line-clamp-2 text-sm leading-7 text-muted-foreground">
+                        {p.excerpt || makeExcerpt(p.content || "")}
+                      </p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gold/15 font-bold text-gold-deep">
+                          {authorInitials(authorName)}
+                        </span>
+                        <span>{authorName}</span>
+                        <span>•</span>
+                        <span>{formatArabicDate(p.published_at)}</span>
+                        <span>•</span>
+                        <span>{p.reading_minutes} دقائق</span>
                       </div>
-                    ) : (
-                      <div className="aspect-[16/10] rounded-lg bg-gradient-to-bl from-accent to-muted" />
-                    )}
-                    {p.categories && (
-                      <span className="mt-4 text-xs font-semibold uppercase tracking-[0.2em] text-gold-deep">
-                        {p.categories.name_ar}
-                      </span>
-                    )}
-                    <h3 className="mt-2 font-display text-xl font-bold leading-snug text-foreground transition-colors group-hover:text-gold-deep">
-                      {p.title}
-                    </h3>
-                    <p className="mt-2 line-clamp-2 text-sm leading-7 text-muted-foreground">
-                      {p.excerpt || makeExcerpt(p.content || "")}
-                    </p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gold/15 font-bold text-gold-deep">{authorInitials(p.author_name)}</span><span>{p.author_name || "معتز العلقمي"}</span><span>•</span><span>{formatArabicDate(p.published_at)}</span><span>•</span><span>{p.reading_minutes} دقائق</span></div>
-                  </Link>
-                ))}
+                    </Link>
+                  );
+                })}
           </div>
         </section>
       )}

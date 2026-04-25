@@ -56,7 +56,7 @@ function CategoryPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("posts")
-        .select("id,title,slug,excerpt,content,cover_image,published_at,reading_minutes,author_name")
+        .select("id,title,slug,excerpt,content,cover_image,published_at,reading_minutes,profiles(display_name)")
         .eq("status", "published")
         .eq("category_id", category!.id)
         .order("published_at", { ascending: false });
@@ -95,22 +95,34 @@ function CategoryPage() {
         </div>
       ) : posts && posts.length > 0 ? (
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-3">
-          {posts.map((p) => (
-            <Link key={p.id} to="/post/$slug" params={{ slug: p.slug }} className="group flex flex-col">
-              {p.cover_image ? (
-                <div className="aspect-[16/10] overflow-hidden rounded-lg bg-muted">
-                  <img src={p.cover_image} alt={p.title} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          {posts.map((p) => {
+            const authorName = (p.profiles as any)?.display_name || "معتز العلقمي";
+            return (
+              <Link key={p.id} to="/post/$slug" params={{ slug: p.slug }} className="group flex flex-col">
+                {p.cover_image ? (
+                  <div className="aspect-[16/10] overflow-hidden rounded-lg bg-muted">
+                    <img src={p.cover_image} alt={p.title} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                  </div>
+                ) : (
+                  <div className="aspect-[16/10] rounded-lg bg-gradient-to-bl from-accent to-muted" />
+                )}
+                <h3 className="mt-4 font-display text-xl font-bold leading-snug text-foreground transition-colors group-hover:text-gold-deep">
+                  {p.title}
+                </h3>
+                <p className="mt-2 line-clamp-2 text-sm leading-7 text-muted-foreground">{p.excerpt || makeExcerpt(p.content || "")}</p>
+                <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gold/15 font-bold text-gold-deep">
+                    {authorInitials(authorName)}
+                  </span>
+                  <span>{authorName}</span>
+                  <span>•</span>
+                  <span>{formatArabicDate(p.published_at)}</span>
+                  <span>•</span>
+                  <span>{p.reading_minutes} دقائق</span>
                 </div>
-              ) : (
-                <div className="aspect-[16/10] rounded-lg bg-gradient-to-bl from-accent to-muted" />
-              )}
-              <h3 className="mt-4 font-display text-xl font-bold leading-snug text-foreground transition-colors group-hover:text-gold-deep">
-                {p.title}
-              </h3>
-              <p className="mt-2 line-clamp-2 text-sm leading-7 text-muted-foreground">{p.excerpt || makeExcerpt(p.content || "")}</p>
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-gold/15 font-bold text-gold-deep">{authorInitials(p.author_name)}</span><span>{p.author_name || "معتز العلقمي"}</span><span>•</span><span>{formatArabicDate(p.published_at)}</span><span>•</span><span>{p.reading_minutes} دقائق</span></div>
-            </Link>
-          ))}
+              </Link>
+            );
+          })}
         </div>
       ) : (
         <div className="rounded-xl border border-dashed border-border bg-muted/30 p-16 text-center text-muted-foreground">

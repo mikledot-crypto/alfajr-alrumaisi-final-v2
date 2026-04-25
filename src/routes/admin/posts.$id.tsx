@@ -23,7 +23,6 @@ import {
   estimateReadingMinutes,
   makeExcerpt,
   uploadMediaFile,
-  isMissingColumnError,
 } from "@/lib/supabase-helpers";
 import { useAuth } from "@/context/AuthContext";
 
@@ -41,7 +40,6 @@ const schema = z.object({
   status: z.enum(["draft", "published"]),
   seo_title: z.string().max(255).optional().or(z.literal("")),
   seo_description: z.string().max(500).optional().or(z.literal("")),
-  canonical_url: z.string().url().or(z.literal("")).optional(),
 });
 
 type PostPayload = {
@@ -54,11 +52,9 @@ type PostPayload = {
   status: "draft" | "published";
   reading_minutes: number;
   published_at: string | null;
-  author_name?: string;
   author_id?: string;
   seo_title?: string | null;
   seo_description?: string | null;
-  canonical_url?: string | null;
 };
 
 function PostEdit() {
@@ -79,7 +75,6 @@ function PostEdit() {
     status: "draft" as "draft" | "published",
     seo_title: "",
     seo_description: "",
-    canonical_url: "",
   });
 
   const [slugTouched, setSlugTouched] = useState(false);
@@ -118,7 +113,6 @@ function PostEdit() {
         status: existing.status as "draft" | "published",
         seo_title: existing.seo_title || "",
         seo_description: existing.seo_description || "",
-        canonical_url: existing.canonical_url || "",
       });
       setSlugTouched(true);
       setExcerptTouched(Boolean(existing.excerpt));
@@ -175,12 +169,6 @@ function PostEdit() {
 
     setLoading(true);
 
-    const authorName =
-      user?.user_metadata?.display_name ||
-      user?.user_metadata?.full_name ||
-      user?.email?.split("@")[0] ||
-      "معتز العلقمي";
-
     const payload: PostPayload = {
       title: parsed.data.title,
       slug: parsed.data.slug,
@@ -191,20 +179,13 @@ function PostEdit() {
       status: finalStatus,
       reading_minutes: estimateReadingMinutes(parsed.data.content),
       published_at: finalStatus === "published" ? (existing?.published_at ?? new Date().toISOString()) : null,
-      author_name: authorName,
       author_id: user?.id,
       seo_title: parsed.data.seo_title || null,
       seo_description: parsed.data.seo_description || null,
-      canonical_url: parsed.data.canonical_url || null,
     };
 
     try {
-      let res = await persistPost(payload);
-
-      if (res.error && isMissingColumnError(res.error)) {
-        const { canonical_url: _canonical, seo_title: _seoTitle, seo_description: _seoDesc, author_id: _authorId, ...compatiblePayload } = payload;
-        res = await persistPost(compatiblePayload);
-      }
+      const res = await persistPost(payload);
 
       if (res.error) {
         toast.error(res.error.message);
@@ -296,7 +277,10 @@ function PostEdit() {
 
               <div className="space-y-2">
                 <Label className="text-base font-bold">محتوى المقال</Label>
-                <RichEditor value={form.content} onChange={(html) => setForm({ ...form, content: html })} />
+                <RichEditor
+                  content={form.content}
+                  onChange={(val) => setForm({ ...form, content: val })}
+                />
               </div>
             </div>
 
@@ -382,10 +366,6 @@ function PostEdit() {
               <div className="space-y-2">
                 <Label className="font-bold">وصف SEO</Label>
                 <Textarea rows={3} value={form.seo_description} onChange={(e) => setForm({ ...form, seo_description: e.target.value })} placeholder={form.excerpt} />
-              </div>
-              <div className="space-y-2">
-                <Label className="font-bold">الرابط الأصلي Canonical</Label>
-                <Input value={form.canonical_url} onChange={(e) => setForm({ ...form, canonical_url: e.target.value })} placeholder="https://..." className="dir-ltr text-left" />
               </div>
             </div>
           </div>

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { authorInitials, formatArabicDate } from "@/lib/supabase-helpers";
 import { sanitizeHtml } from "@/lib/sanitize";
-import { ArrowRight, Calendar, User, Clock, Tag } from "lucide-react";
+import { ArrowRight, Calendar, Clock, Tag } from "lucide-react";
 
 interface PostMeta {
   title: string;
@@ -22,22 +22,28 @@ export const Route = createFileRoute("/_public/post/$slug")({
   loader: async ({ params }): Promise<{ meta: PostMeta | null }> => {
     const { data } = await supabase
       .from("posts")
-      .select("title,excerpt,cover_image,author_name,published_at,categories(name_ar),seo_title,seo_description")
+      .select("title,excerpt,cover_image,published_at,categories(name_ar),seo_title,seo_description,profiles(display_name)")
       .eq("slug", params.slug)
       .eq("status", "published")
       .maybeSingle();
+    
     if (!data) return { meta: null };
+    
+    const authorName = (data.profiles as any)?.display_name || "معتز العلقمي";
+    const origin = typeof window !== "undefined" ? window.location.origin : "https://alfajr-alrumaisi.com";
+    const canonicalUrl = `${origin}/post/${params.slug}`;
+
     return {
       meta: {
         title: data.title,
         excerpt: data.excerpt,
         cover_image: data.cover_image,
-        author_name: data.author_name,
+        author_name: authorName,
         published_at: data.published_at,
-        category_name: data.categories?.name_ar ?? null,
+        category_name: (data.categories as any)?.name_ar ?? null,
         seo_title: data.seo_title,
         seo_description: data.seo_description,
-        canonical_url: null,
+        canonical_url: canonicalUrl,
       },
     };
   },
@@ -112,7 +118,7 @@ function PostPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("posts")
-        .select("*,categories(name_ar,slug)")
+        .select("*,categories(name_ar,slug),profiles(display_name)")
         .eq("slug", slug)
         .eq("status", "published")
         .maybeSingle();
@@ -143,6 +149,7 @@ function PostPage() {
   }
 
   const safeContent = sanitizeHtml(post.content);
+  const authorName = (post.profiles as any)?.display_name || "معتز العلقمي";
 
   return (
     <article className="container mx-auto max-w-3xl px-4 py-16">
@@ -150,11 +157,11 @@ function PostPage() {
         {post.categories && (
           <Link
             to="/category/$slug"
-            params={{ slug: post.categories.slug }}
+            params={{ slug: (post.categories as any).slug }}
             className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-[0.2em] text-gold-deep hover:text-burgundy transition-colors"
           >
             <Tag className="h-3 w-3" />
-            {post.categories.name_ar}
+            {(post.categories as any).name_ar}
           </Link>
         )}
         <h1 className="mt-6 font-display text-4xl font-bold leading-[1.3] text-foreground md:text-6xl">
@@ -162,8 +169,8 @@ function PostPage() {
         </h1>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground border-y border-border/40 py-4">
           <div className="flex items-center gap-2">
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gold/15 text-sm font-bold text-gold-deep">{authorInitials(post.author_name)}</span>
-            <span>{post.author_name || "معتز العلقمي"}</span>
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-gold/15 text-sm font-bold text-gold-deep">{authorInitials(authorName)}</span>
+            <span>{authorName}</span>
           </div>
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-gold" />
