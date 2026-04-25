@@ -123,3 +123,34 @@ VITE_SUPABASE_PROJECT_ID=YOUR_PROJECT_REF
 SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
 SUPABASE_PUBLISHABLE_KEY=YOUR_SUPABASE_PUBLISHABLE_KEY
 ```
+
+## تصحيح نهائي مهم للنشر والميديا
+
+إذا ظهر في لوحة التحكم خطأ مثل:
+
+```text
+Could not find the 'status' column of 'posts' in the schema cache
+Could not find the 'reading_minutes' column of 'posts' in the schema cache
+Could not find the 'author_name' column of 'posts' in the schema cache
+```
+
+فهذا يعني أن قاعدة Supabase قديمة أو أن PostgREST schema cache لم تُحدَّث. شغّل هذا الملف مرة واحدة من Supabase SQL Editor:
+
+```text
+supabase/migrations/20260425040000_final_cms_hardening.sql
+```
+
+هذا الملف آمن ولا يحذف أي بيانات. يضيف الأعمدة الناقصة فقط، يضبط سياسات RLS، يجهز Storage bucket باسم `media`، ويجبر Supabase على تحديث schema cache عبر:
+
+```sql
+notify pgrst, 'reload schema';
+```
+
+بعد تشغيله:
+
+1. انتظر دقيقة واحدة.
+2. حدّث صفحة لوحة التحكم.
+3. جرّب حفظ مسودة.
+4. جرّب نشر المقال.
+5. جرّب رفع صورة غلاف.
+

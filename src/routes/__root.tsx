@@ -12,9 +12,7 @@ function NotFoundComponent() {
       <div className="max-w-md text-center">
         <h1 className="font-display text-7xl font-bold text-foreground">٤٠٤</h1>
         <h2 className="mt-4 font-display text-xl font-semibold text-foreground">الصفحة غير موجودة</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          الصفحة التي تبحث عنها غير متوفرة أو نُقلت.
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">الصفحة التي تبحث عنها غير متوفرة أو نُقلت.</p>
         <div className="mt-6">
           <Link
             to="/"
@@ -23,6 +21,29 @@ function NotFoundComponent() {
             العودة للرئيسية
           </Link>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ErrorComponent({ error }: { error: unknown }) {
+  const message = error instanceof Error ? error.message : String(error ?? "حدث خطأ غير معروف");
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4" dir="rtl">
+      <div className="max-w-xl rounded-2xl border border-destructive/20 bg-card p-8 text-center shadow-sm">
+        <h1 className="font-display text-3xl font-bold text-foreground">حدث خطأ غير متوقع</h1>
+        <p className="mt-3 leading-8 text-muted-foreground">
+          تعذّر تحميل الصفحة. جرّب التحديث، وإن استمرت المشكلة انسخ الرسالة التالية للمطور.
+        </p>
+        <pre className="mt-5 max-h-48 overflow-auto rounded-lg bg-muted p-4 text-left text-xs text-destructive" dir="ltr">
+          {message}
+        </pre>
+        <Link
+          to="/"
+          className="mt-6 inline-flex items-center justify-center rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+        >
+          العودة للرئيسية
+        </Link>
       </div>
     </div>
   );
@@ -57,6 +78,7 @@ export const Route = createRootRoute({
   shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
+  errorComponent: ErrorComponent,
 });
 
 function RootShell({ children }: { children: React.ReactNode }) {
